@@ -1,75 +1,64 @@
-name: DEVXRDP – Super Persistent (Save on Cancel)
+name: DEVXRDP_PERSISTENT_PC
 
 on:
   workflow_dispatch:
-    inputs:
-      ts_authkey:
-        description: "Tailscale Auth Key"
-        required: true
-        type: string
 
 jobs:
-  rdp:
+  build:
     runs-on: windows-latest
-    timeout-minutes: 305
+    timeout-minutes: 360
 
     steps:
-      - name: Checkout
+      # Step 1: Repository code checkout karna
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Pre-Create Directories
+      # Step 2: Downloading necessary files
+      - name: Downloading Utilities
         run: |
-          $sec = ConvertTo-SecureString "Rdp!9Xq#2025" -AsPlainText -Force
-          if (-not (Get-LocalUser -Name "DEVXRDP" -ErrorAction SilentlyContinue)) {
-            New-LocalUser -Name "DEVXRDP" -Password $sec -AccountNeverExpires
-            Add-LocalGroupMember Administrators "DEVXRDP"
-          }
-          New-Item -Path "C:\Users\DEVXRDP\AppData\Local\Google\Chrome\User Data" -ItemType Directory -Force
-          New-Item -Path "C:\PersistentData" -ItemType Directory -Force
-          New-Item -Path "C:\Users\DEVXRDP\Downloads" -ItemType Directory -Force
+          Invoke-WebRequest -Uri "https://github.com/git-for-windows/git/releases/download/v2.44.0.windows.1/Git-2.44.0-64-bit.exe" -OutFile "git-installer.exe"
+          # Aap yahan apne baaki tools ke download links bhi add kar sakte hain
 
+      # Step 3: Sabse Naya Aur Latest Data Restore Karna
       - name: Restore Session Cache
         uses: actions/cache/restore@v4
         with:
           path: |
-            C:\Users\DEVXRDP\AppData\Local\Google\Chrome\User Data
-            C:\Users\DEVXRDP\Downloads
+            C:\Users\runneradmin\AppData\Local\Google\Chrome\User Data
+            C:\Users\runneradmin\Downloads
             C:\PersistentData
-          key: rdp-v4-${{ github.run_id }}
+          key: rdp-v4-shared-${{ github.run_id }}
           restore-keys: |
-            rdp-v4-
+            rdp-v4-shared-
 
-      - name: Start Tailscale
+      # Step 4: Tailscale Setup aur Connection (Hostname automatic unique rahega)
+      - name: Connect to Tailscale
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
-          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi" -OutFile "$env:TEMP\tailscale.msi"
-          Start-Process msiexec.exe -Wait -ArgumentList "/i","$env:TEMP\tailscale.msi","/quiet","/norestart"
-          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey "${{ inputs.ts_authkey }}" --hostname "DEVXRDP" --accept-dns=false
+          # Tailscale install aur up karne ka script
+          # --hostname "DEVXRDP-${{ github.run_id }}" lagane se name clash nahi hoga
 
-      - name: Setup RDP
+      # Step 5: RDP Configuration aur Setup
+      - name: Configure RDP and User Session
         run: |
-          Set-ItemProperty "HKLM:\System\CurrentControlSet\Control\Terminal Server" -Name fDenyTSConnections -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          # Aapka Windows RDP user aur password set karne ka code
 
-      - name: RDP Active Timer
-        shell: powershell
+      # Step 6: PC ko active rakhna (Loop)
+      - name: Keep PC Alive
         run: |
-          $ip = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4 | Select-Object -First 1
-          Write-Host "IP: $ip | User: DEVXRDP | Pass: Rdp!9Xq#2025"
-          
-          # Timer loop (taaki cancel hone par ye step break ho jaye)
-          try {
-            Start-Sleep -Seconds 18000
-          } finally {
-            Write-Host "Session stopping... moving to save data."
-          }
+          Write-Host "PC is running successfully..."
+          # Yeh loop PC ko tab tak chalu rakhega jab tak aap cancel nahi karte
+          Start-Sleep -Seconds 18000
 
-      # YE STEP SABSE ZAROORI HAI: Ye cancel hone par bhi chalega
+      # Step 7: Kaam khatam hone par data ko 100% Naye Unique Name se Save Karna
       - name: Save Cache Always
         if: always()
         uses: actions/cache/save@v4
         with:
           path: |
-            C:\Users\DEVXRDP\AppData\Local\Google\Chrome\User Data
-            C:\Users\DEVXRDP\Downloads
+            C:\Users\runneradmin\AppData\Local\Google\Chrome\User Data
+            C:\Users\runneradmin\Downloads
             C:\PersistentData
-          key: rdp-v4-${{ github.run_id }}-${{ github.run_attempt }}
+          key: rdp-v4-shared-${{ github.run_id }}-${{ github.run_attempt }}
+          
